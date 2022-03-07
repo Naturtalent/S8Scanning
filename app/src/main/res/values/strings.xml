@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Remote Kamera</string>
+    <string name="action_settings">Settings</string>
+    <!-- Strings used for fragments for navigation -->
+    <string name="first_fragment_label">First Fragment</string>
+    <string name="second_fragment_label">Second Fragment</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+
+    <string name="hello_first_fragment">Hello first fragment</string>
+    <string name="hello_second_fragment">Hello second fragment. Arg: %1$s</string>
+    <string name="hotspot_ssid_label">ssid</string>
+    <string name="hotspot_pass_label">pwd</string>
+    <string name="hotspot_details_message">hotSpotInfo</string>
+    <string name="retrieving_access_points">Verfügbare HotSpots abfragen</string>
+
+    <string name="title_activity_location_permission_request">Location Permission Required</string>
+    <string name="main_message_activity_location_permission_request">See distances to access points with Wifi RTT (permission required).</string>
+    <string name="details_message_activity_location_permission_request">This app needs access to your phone\'s location to show the distances between this device and Wifi RTT enabled access points.</string>
+    <string name="no_thanks_activity_location_permission_request">No Thanks</string>
+    <string name="continue_activity_location_permission_request">Continue</string>
+    <string name="fetch_text">connection</string>
+    <string name="clear_text">clear</string>
+    <string name="welcome_message">Welcome</string>
+    <string name="wifi_connection">WiFi Verbindungen</string>
+    <string name="connection_error">Connection error</string>
+
+
+</resources>

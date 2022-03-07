@@ -1,0 +1,23 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="it.naturtalent.s8scanning.MainActivity">
+    <item
+        android:id="@+id/action_settings"
+        android:orderInCategory="100"
+        android:title="@string/action_settings"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_connections"
+        android:orderInCategory="101"
+        android:title="@string/wifi_connection"
+        app:showAsAction="never" />
+
+    <item android:id="@+id/fetch_action"
+        android:title="@string/fetch_text"
+        app:showAsAction="ifRoom|withText" />
+    <item android:id="@+id/clear_action"
+        android:title="@string/clear_text"
+        app:showAsAction="ifRoom|withText" />
+</menu>
