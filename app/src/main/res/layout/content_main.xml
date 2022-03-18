@@ -12,17 +12,22 @@
 
         <TextView
             android:id="@+id/intro_text"
-            android:layout_width="181dp"
-            android:layout_height="721dp"
+            android:layout_width="match_parent"
+            android:layout_height="275dp"
             android:layout_weight="1"
             android:freezesText="true"
             android:text="@string/welcome_message"
             android:textSize="16sp" />
 
+        <SurfaceView
+            android:id="@+id/surfaceView"
+            android:layout_width="match_parent"
+            android:layout_height="304dp" />
+
         <View
             android:layout_width="fill_parent"
-            android:layout_height="1dp"
-            android:background="@android:color/darker_gray"/>
+            android:layout_height="13dp"
+            android:background="@android:color/darker_gray" />
         <TextView
             android:id="@+id/data_text"
             android:layout_weight="1"

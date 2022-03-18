@@ -19,11 +19,13 @@
     <string name="details_message_activity_location_permission_request">This app needs access to your phone\'s location to show the distances between this device and Wifi RTT enabled access points.</string>
     <string name="no_thanks_activity_location_permission_request">No Thanks</string>
     <string name="continue_activity_location_permission_request">Continue</string>
-    <string name="fetch_text">connection</string>
-    <string name="clear_text">clear</string>
+    <string name="fetch_text">start</string>
+    <string name="clear_text">stop</string>
     <string name="welcome_message">Welcome</string>
     <string name="wifi_connection">WiFi Verbindungen</string>
     <string name="connection_error">Connection error</string>
+    <string name="alert_dialog_ok">OK</string>
+
 
 
 </resources>

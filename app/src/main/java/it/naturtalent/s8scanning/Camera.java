@@ -25,6 +25,7 @@ import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
@@ -71,23 +72,37 @@ public class Camera
         protected static final int CAMERACHOICE = CameraCharacteristics.LENS_FACING_BACK;
         protected static long cameraCaptureStartTime;
         protected CameraDevice cameraDevice;
-        protected CameraCaptureSession session;
-        protected ImageReader imageReader;
+        public static CameraCaptureSession session;
+        public static ImageReader imageReader;
         protected SurfaceHolder surfaceHolder;
 
-        protected Activity activity;
+        //protected Activity activity;
         protected CameraCharacteristics characteristics;
 
         private Surface viewSurface;
 
 
-        /*
-             Konstruktion
+
+
+        public Camera2Service()
+        {
+            SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+            this.viewSurface = surfaceView.getHolder().getSurface();
+
+        }
+
+        /**
+         * Konstruktion
+         * @param activity
+         * @param surface
          */
         public Camera2Service(Activity activity, Surface surface)
         {
-            this.activity = activity;
-            this.viewSurface = surface;
+           // this.activity = activity;
+            //this.viewSurface = surface;
+
+            //SurfaceView surfaceView = (SurfaceView) activity.findViewById(R.id.surfaceView);
+            //Surface test = surfaceView.getHolder().getSurface();
         }
 
         /**
@@ -118,11 +133,9 @@ public class Camera
 
 
 
-
-
-        /*
-            Eine CameraCaptureSession beschreibt alle Pipelines, die an ein CameraDevice gebunden sind und verwaltet einen Queue von
-            CaptureRequests. Diese CaptureRequests sind die aktuelle Konfiguration.
+        /**
+         *  Eine CameraCaptureSession beschreibt alle Pipelines, die an ein CameraDevice gebunden sind und verwaltet einen Queue von
+         *  CaptureRequests. Diese CaptureRequests sind die aktuelle Konfiguration.
          */
         protected CameraCaptureSession.StateCallback sessionStateCallback = new CameraCaptureSession.StateCallback()
         {
@@ -133,11 +146,18 @@ public class Camera
                 try
                 {
                     // ein Repeating - CaptureRequest erzeugen und an die Camera senden
-                    session.setRepeatingRequest(createCaptureRequest(), null, null);
+                    //session.setRepeatingRequest(createCaptureRequest(), null, null);
+
+                    session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+
                     cameraCaptureStartTime = System.currentTimeMillis();
+                    session.capture(createSnapShotCaptureRequest(), null, null);
+
+                    Log.d(TAG, "CameraCaptureSession.StateCallback - onReaddy");
+
                 } catch (CameraAccessException e)
                 {
-                    Log.e(TAG, e.getMessage());
+                    Log.e(TAG, "CameraCaptureSession.StateCallback Error: " + e.getMessage());
                 }
             }
 
@@ -188,22 +208,23 @@ public class Camera
          */
         public void readyCamera()
         {
-            CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-            //CameraManager manager = (CameraManager) getSystemService(CAMERA_SERVICE);
+            //CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+            CameraManager manager = (CameraManager) MainActivity.context.getApplicationContext().getSystemService(Context.CAMERA_SERVICE);
+
             try
             {
                 // Camera Permission checken
                 String pickedCamera = getCamera(manager);
                 if (ActivityCompat.checkSelfPermission(MainActivity.context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
                 {
-                    ActivityCompat.requestPermissions(activity, new String[] {Manifest.permission.CAMERA}, MY_PERMISSIONS_REQUEST_CAMERA);
+                    ActivityCompat.requestPermissions(MainActivity.activity, new String[] {Manifest.permission.CAMERA}, MY_PERMISSIONS_REQUEST_CAMERA);
                     return;
                 }
 
                 manager.openCamera(pickedCamera, cameraStateCallback, null);
                 imageReader = ImageReader.newInstance(1920, 1088, ImageFormat.JPEG, 2 /* images buffered */);
                 imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
-                Log.d(TAG, "imageReader created");
+                Log.d(TAG, "readyCamera - imageReader created");
 
             } catch (CameraAccessException e)
             {
@@ -241,6 +262,8 @@ public class Camera
 
         /**
          * Erinnerung: Ueberschreibt onStartCommand() der Klasse Service
+         * wird jedesmal aufgerufen, wenn startService() aufgerufen wird.
+         *
          * @param intent
          * @param flags
          * @param startId
@@ -249,7 +272,7 @@ public class Camera
         @Override
         public int onStartCommand(Intent intent, int flags, int startId)
         {
-            Log.d(TAG, "onStartCommand flags " + flags + " startId " + startId);
+            Log.d(TAG, "Service - onStartCommand flags " + flags + " startId " + startId);
 
             readyCamera();
 
@@ -258,11 +281,12 @@ public class Camera
 
         /**
          * Erinnerung: Ueberschreibt oncreate() der Klasse Service
+         * Wird aufgerufen, wenn der Service zum erstenmal aufgerufen wird.
          */
         @Override
         public void onCreate()
         {
-            Log.d(TAG, "onCreate service");
+            Log.d(TAG, "Service - onCreate");
             super.onCreate();
         }
 
@@ -312,7 +336,10 @@ public class Camera
             ByteBuffer buffer;
             byte[] bytes;
             boolean success = false;
-            File file = new File(Environment.getExternalStorageDirectory() + "/Pictures/image.jpg");
+            //File file = new File(Environment.getExternalStorageDirectory() + "/Pictures/image.jpg");
+
+            File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + "/image.jpg");
+
             FileOutputStream output = null;
 
             if (image.getFormat() == ImageFormat.JPEG)
@@ -356,6 +383,69 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
+        protected CaptureRequest createViewerCaptureRequest()
+        {
+            try
+            {
+                // eine verdefinierte Schablone beutzen
+                CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+
+                // ImageReader - Puffer hinzufuegen
+                //builder.addTarget(imageReader.getSurface());
+
+                // ViewSurface - Puffer hinzufuegen
+                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+                builder.addTarget(surfaceView.getHolder().getSurface());
+
+                // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
+                //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
+
+                return builder.build();
+            } catch (CameraAccessException e)
+            {
+                Log.e(TAG, e.getMessage());
+                return null;
+            }
+        }
+
+
+        /**
+         *  Anforderungen an die Camera erzeugen damit diese Images an die verwendeten Puffer senden kann. Es koennen nur die Puffer verwendet werden die
+         *  in der CaptureSession - Erzeugung definiert wurden.
+         *
+         * @return CaptureRequest zur Anforderung des Images
+         */
+        public CaptureRequest createSnapShotCaptureRequest()
+        {
+            try
+            {
+                // eine verdefinierte Schablone beutzen
+                CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_VIDEO_SNAPSHOT);
+
+                // ImageReader - Puffer hinzufuegen
+                builder.addTarget(imageReader.getSurface());
+
+                // ViewSurface - Puffer hinzufuegen
+                //Log.e(TAG, "ViewSurfcae check: "+viewSurface);
+                //builder.addTarget(viewSurface);
+
+                // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
+                //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
+
+                return builder.build();
+            } catch (CameraAccessException e)
+            {
+                Log.e(TAG, e.getMessage());
+                return null;
+            }
+        }
+
+        /**
+         *  Anforderungen an die Camera erzeugen damit diese Images an die verwendeten Puffer senden kann. Es koennen nur die Puffer verwendet werden die
+         *  in der CaptureSession - Erzeugung definiert wurden.
+         *
+         * @return CaptureRequest zur Anforderung des Images
+         */
         protected CaptureRequest createCaptureRequest()
         {
             try
@@ -379,6 +469,7 @@ public class Camera
                 return null;
             }
         }
+
 
         @Override
         public IBinder onBind(Intent intent)

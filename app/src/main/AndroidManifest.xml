@@ -29,6 +29,8 @@
             android:theme="@style/CustomAppTheme">
         </activity>
 
+        <service android:enabled="true" android:name="it.naturtalent.s8scanning.Camera$Camera2Service" />
+
     </application>
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -38,6 +40,5 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA"/>
-
 
 </manifest>

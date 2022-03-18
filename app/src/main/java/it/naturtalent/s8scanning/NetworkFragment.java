@@ -22,6 +22,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 
 
 import androidx.annotation.Nullable;
@@ -33,6 +34,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -169,35 +172,26 @@ public class NetworkFragment extends Fragment
             if (!isCancelled() && urls != null && urls.length > 0) {
                 String urlString = urls[0];
                 try {
+
                     URL url = new URL(urlString);
 
-
-                    //
-                    // laufend S8 Server abfragen
-                    //
-
-                    for(int i = 0;i < 5;i++)
-                    {
-
-                        String resultString = downloadUrl(url);
-                        if (resultString != null)
-                        {
-                            result = new Result(resultString);
-
+                     String resultString = downloadUrl(url);
+                     if (resultString != null)
+                       {
+                          result = new Result(resultString);
                         } else
                         {
                             throw new IOException("No response received.");
                         }
-
-                    }
-
-
                 } catch(Exception e) {
                     result = new Result(e);
                 }
             }
+
             return result;
         }
+
+
 
         /**
          * Send DownloadCallback a progress update.
