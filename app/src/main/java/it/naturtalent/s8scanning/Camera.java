@@ -19,6 +19,7 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.util.Log;
@@ -28,6 +29,7 @@ import android.view.SurfaceView;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 
 import java.io.File;
@@ -71,7 +73,7 @@ public class Camera
         protected static final String TAG = "myLog";
         protected static final int CAMERACHOICE = CameraCharacteristics.LENS_FACING_BACK;
         protected static long cameraCaptureStartTime;
-        protected CameraDevice cameraDevice;
+        protected static CameraDevice cameraDevice;
         public static CameraCaptureSession session;
         public static ImageReader imageReader;
         protected SurfaceHolder surfaceHolder;
@@ -79,15 +81,63 @@ public class Camera
         //protected Activity activity;
         protected CameraCharacteristics characteristics;
 
-        private Surface viewSurface;
+        private static Surface viewSurface;
 
+        public static Zoom zoom;
+        public static float zoomFaktor = 4;
 
+        public static Camera2Service camera2Service;
 
-
+        /**
+         *  Konstruktion des Service
+         *
+         *  (wird aufgerufen durch
+         *   'getApplicationContext().startService(new Intent(MainActivity.this, Camera.Camera2Service.class));'
+         *   im 'onCreate()-Callback von MainActivity)
+         */
         public Camera2Service()
         {
+            camera2Service = this;
+
             SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
             this.viewSurface = surfaceView.getHolder().getSurface();
+
+
+            surfaceView.getHolder().addCallback(new SurfaceHolder.Callback()
+            {
+            @Override
+            public void surfaceCreated(@NonNull SurfaceHolder holder)
+            {
+                Log.d(TAG, "Surface created-111");
+                readyCamera();
+
+            }
+
+            @Override
+            public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height)
+            {
+
+                Log.d(TAG, "Surface  changed");
+            }
+
+            @Override
+            public void surfaceDestroyed(@NonNull SurfaceHolder holder)
+            {
+                Log.d(TAG, "Surface destroyed-125");
+                if(cameraDevice != null)
+                {
+                    Log.d(TAG, "Surface destroyed- camera closes- 129");
+                    //cameraDevice.close();
+                    //session.close();
+                }
+
+
+
+            }
+            });
+
+
+
 
         }
 
@@ -105,11 +155,15 @@ public class Camera
             //Surface test = surfaceView.getHolder().getSurface();
         }
 
-        /**
-         * Callbackfunktionen, die Auskunft ueber den aktuellen Status der Cameraverbindung geben
-         */
+
+
+        // eine Camera StateCallback Instanz erzeugen
+        // diese Variable wird der Funktion Camera Manager#openCamera (readyCamera()) uebergeben und gibt mittels ihrer
+        // Callbackfunktionen Auskunft ueber den aktuellen Status der Cameraverbindung
+
         protected CameraDevice.StateCallback cameraStateCallback = new CameraDevice.StateCallback()
         {
+
             @Override
             public void onOpened(@NonNull CameraDevice camera)
             {
@@ -129,7 +183,11 @@ public class Camera
             {
                 Log.e(TAG, "CameraDevice.StateCallback onError " + error);
             }
+
+
         };
+
+
 
 
 
@@ -139,6 +197,7 @@ public class Camera
          */
         protected CameraCaptureSession.StateCallback sessionStateCallback = new CameraCaptureSession.StateCallback()
         {
+            @RequiresApi(api = Build.VERSION_CODES.Q)
             @Override
             public void onReady(CameraCaptureSession session)
             {
@@ -148,7 +207,9 @@ public class Camera
                     // ein Repeating - CaptureRequest erzeugen und an die Camera senden
                     //session.setRepeatingRequest(createCaptureRequest(), null, null);
 
-                    session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+                    // session.abortCaptures();
+                     session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+
 
                     cameraCaptureStartTime = System.currentTimeMillis();
                     session.capture(createSnapShotCaptureRequest(), null, null);
@@ -172,6 +233,10 @@ public class Camera
             public void onConfigureFailed(@NonNull CameraCaptureSession session)
             {
             }
+
+
+
+
         };
 
         /**
@@ -214,22 +279,35 @@ public class Camera
             try
             {
                 // Camera Permission checken
-                String pickedCamera = getCamera(manager);
                 if (ActivityCompat.checkSelfPermission(MainActivity.context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
                 {
                     ActivityCompat.requestPermissions(MainActivity.activity, new String[] {Manifest.permission.CAMERA}, MY_PERMISSIONS_REQUEST_CAMERA);
                     return;
                 }
 
+                // Id der gewaehlte Kamera (front/back) ermitteln
+                String pickedCamera = getCamera(manager);
+
+                // eine Kamera oeffnen
                 manager.openCamera(pickedCamera, cameraStateCallback, null);
+
+                // ein 'SpeicherSurface' zur aufnahme der aufgenommenen Images
                 imageReader = ImageReader.newInstance(1920, 1088, ImageFormat.JPEG, 2 /* images buffered */);
                 imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
                 Log.d(TAG, "readyCamera - imageReader created");
 
+                // eine Zoomklasse generieren, ueber die das Zoomen gesteuert wird
+                zoom = new Zoom(characteristics);
+
             } catch (CameraAccessException e)
             {
-                Log.e(TAG, e.getMessage());
+                Log.e(TAG, "Line 276 " + e.getMessage());
             }
+        }
+
+        private void openCamera()
+        {
+            readyCamera();
         }
 
         /**
@@ -274,7 +352,7 @@ public class Camera
         {
             Log.d(TAG, "Service - onStartCommand flags " + flags + " startId " + startId);
 
-            readyCamera();
+            //readyCamera();
 
             return super.onStartCommand(intent, flags, startId);
         }
@@ -304,7 +382,7 @@ public class Camera
                 cameraDevice.createCaptureSession(Arrays.asList(imageReader.getSurface(), viewSurface), sessionStateCallback, null);
             } catch (CameraAccessException e)
             {
-                Log.e(TAG, e.getMessage());
+                Log.e(TAG, "Line 352 "+e.getMessage());
             }
         }
 
@@ -319,7 +397,7 @@ public class Camera
                 session.abortCaptures();
             } catch (CameraAccessException e)
             {
-                Log.e(TAG, e.getMessage());
+                Log.e(TAG, "Line 367 "+e.getMessage());
             }
             session.close();
         }
@@ -338,7 +416,9 @@ public class Camera
             boolean success = false;
             //File file = new File(Environment.getExternalStorageDirectory() + "/Pictures/image.jpg");
 
-            File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + "/image.jpg");
+            String fileName = "/image"+new Integer(MainActivity.snapshotCounter).toString()+".jpg";
+            File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + fileName);
+            //File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + "/image.jpg");
 
             FileOutputStream output = null;
 
@@ -377,34 +457,24 @@ public class Camera
             }
         }
 
+
         /**
-         *  Anforderungen an die Camera erzeugen damit diese Images an die verwendeten Puffer senden kann. Es koennen nur die Puffer verwendet werden die
-         *  in der CaptureSession - Erzeugung definiert wurden.
          *
-         * @return CaptureRequest zur Anforderung des Images
          */
-        protected CaptureRequest createViewerCaptureRequest()
+        @RequiresApi(api = Build.VERSION_CODES.Q)
+        public void cameraSnapShot()
         {
             try
             {
-                // eine verdefinierte Schablone beutzen
-                CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+                session.stopRepeating();
 
-                // ImageReader - Puffer hinzufuegen
-                //builder.addTarget(imageReader.getSurface());
+                session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
 
-                // ViewSurface - Puffer hinzufuegen
-                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
-                builder.addTarget(surfaceView.getHolder().getSurface());
+                session.setRepeatingRequest(createSnapShotCaptureRequest(), null, null);
 
-                // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
-                //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
-
-                return builder.build();
             } catch (CameraAccessException e)
             {
-                Log.e(TAG, e.getMessage());
-                return null;
+                e.printStackTrace();
             }
         }
 
@@ -415,7 +485,56 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
-        public CaptureRequest createSnapShotCaptureRequest()
+        @RequiresApi(api = Build.VERSION_CODES.Q)
+        protected CaptureRequest createViewerCaptureRequest()
+        {
+                try
+                {
+                    // eine vordefinierte Schablone beutzen
+                    CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+
+                    // ImageReader - Puffer hinzufuegen
+                    //builder.addTarget(imageReader.getSurface());
+
+                    // ViewSurface - Puffer hinzufuegen
+                    SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+                    builder.addTarget(surfaceView.getHolder().getSurface());
+
+                /*
+                surfaceView.addOnLayoutChangeListener(new View.OnLayoutChangeListener()
+                {
+                    @Override
+                    public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom)
+                    {
+                        Log.e(TAG, "ViewSurface changed");
+                    }
+                });
+
+                 */
+
+
+                    // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
+                    //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
+
+                    zoom.setZoom(builder, zoomFaktor);
+
+                    return builder.build();
+                } catch (CameraAccessException e)
+                {
+                    Log.e(TAG, e.getMessage());
+                    return null;
+                }
+
+        }
+
+
+        /**
+         *  Anforderungen an die Camera erzeugen damit diese Images an die verwendeten Puffer senden kann. Es koennen nur die Puffer verwendet werden die
+         *  in der CaptureSession - Erzeugung definiert wurden.
+         *
+         * @return CaptureRequest zur Anforderung des Images
+         */
+        public static CaptureRequest createSnapShotCaptureRequest()
         {
             try
             {
@@ -431,6 +550,8 @@ public class Camera
 
                 // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
                 //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
+
+                zoom.setZoom(builder,zoomFaktor);
 
                 return builder.build();
             } catch (CameraAccessException e)

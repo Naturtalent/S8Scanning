@@ -8,20 +8,22 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 //import androidx.navigation.fragment.NavHostFragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 public class FirstFragment extends Fragment
 {
+    private ViewModelProvider cameraViewModel;
 
     @Override
-    public View onCreateView(
-            LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState
-    )
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
     {
+
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_first, container, false);
+
+
     }
 
     public void onViewCreated(@NonNull View view, Bundle savedInstanceState)

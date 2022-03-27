@@ -9,7 +9,19 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_connections"
+        android:id="@+id/start_accesspoint"
+        android:orderInCategory="101"
+        android:title="@string/start_accesspoint"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/stop_accesspoint"
+        android:orderInCategory="101"
+        android:title="@string/stop_accesspoint"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/wifi_connection"
         android:orderInCategory="101"
         android:title="@string/wifi_connection"
         app:showAsAction="never" />

@@ -3,21 +3,29 @@ package it.naturtalent.s8scanning;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
+import android.net.wifi.WifiNetworkSuggestion;
 import android.os.Build;
 import android.os.Bundle;
 
@@ -34,6 +42,8 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
+import androidx.lifecycle.ViewModel;
+import androidx.lifecycle.ViewModelProvider;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -52,6 +62,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -59,6 +70,7 @@ import javax.net.ssl.HttpsURLConnection;
 /**
  *
  */
+
 public class MainActivity extends AppCompatActivity  implements DownloadCallback
 {
 
@@ -90,30 +102,43 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     // Camera-Ausloeser Klick
     private MediaPlayer _shootMP;
 
-    //private String remoteData;
+
 
 
     private static final String httpMsgCounterPrefix = "Counter: ";
     private boolean fetchDataEnable = false;
-    private int snapshotCounter = 0;
+    public static int snapshotCounter = 0;
 
 
     // LocalHotspot Variable
     WifiConfiguration currentConfig;
     WifiManager.LocalOnlyHotspotReservation hotspotReservation;
 
+
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+
+        Log.e(TAG, "onCreate");
+
+        // Energisparmodus abschalten
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-
+        
         // Toolbar erzeugen und ActionBar ersetzen (Titel aus AndroidManifest)
         setContentView(R.layout.activity_main);
+        //setContentView(R.layout.fragment_first);
+
+        // ViewModel - Variante testen
+        final CameraViewModel viewModel = new ViewModelProvider(this).get(CameraViewModel.class);
+
+
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+
+
 
         //
         // beweglichen Aktionsbutten adressieren und einen Listener zuordnen
@@ -122,15 +147,30 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         fab.setTooltipText("maueller Schnappschuss");
         fab.setOnClickListener(new View.OnClickListener()
         {
+            @RequiresApi(api = Build.VERSION_CODES.P)
             @Override
             public void onClick(View view)
             {
-                snapShot();
+                //snapShot();
+                cameraSnapShot();
 
                 Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
                         .setAction("Action", null).show();
             }
         });
+
+        // Instanziiert und startet den CameraService
+
+
+
+        //Intent intent = new Intent(MainActivity.this, Camera.Camera2Service.class);
+        //if(Camera.Camera2Service.camera2Service.viewSurfaceValid)
+          //  getApplicationContext().stopService(intent);
+
+         getApplicationContext().startService(new Intent(MainActivity.this, Camera.Camera2Service.class));
+
+
+
 
         // Textview zur Anzeige der fetched-Daten
         mDataText = (TextView) findViewById(R.id.data_text);
@@ -151,6 +191,8 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         //boolean netCheck = isNetworkAvailable();
 
 
+
+
         // context modulglobal machen
         context = getApplicationContext();
         activity = MainActivity.this;
@@ -158,12 +200,22 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         // Local Hotspot Test (momentan nicht unterstützt)
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
+
+        // Instanziiert und startet den CameraService
+        // Start der Kamera durch Callback onStartCommand() in Service
         getApplicationContext().startService(new Intent(MainActivity.this, Camera.Camera2Service.class));
 
-        // WLAN Hotspot starten
-        //turnOnHotspot();
+
+        //WifiTools wifiTools = new WifiTools();
+        //wifiTools.connect();
+
 
     }
+
+
+
+
+
 
     /**
      * Beim Starten der App wird eine Http Verbindung zum S8 Server aufgebaut
@@ -191,10 +243,45 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
 
     }
 
+    @Override
+    protected void onDestroy()
+    {
+        Log.e(TAG, "onDestroy()");
+        super.onDestroy();
+
+    }
+
+    /**
+     * Wird nur aufgerufen, wenn im AndroidManifest 'configChangees' definiert ist.
+     *
+     *  <activity android:name=".MyActivity"
+     *             ....
+     *           android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+     *           ...
+     *  Mit dieser Definition wird verhindert, das bei Konfigurationsaenderungen die
+     *  Actifity erneut gestartet wird.
+     *
+     * @param newConfig
+     */
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig)
+    {
+        Log.e(TAG, "onConfigurationChanged");
+
+        // Checks the orientation of the screen
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Toast.makeText(this, "landscape", Toast.LENGTH_SHORT).show();
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
+            Toast.makeText(this, "portrait", Toast.LENGTH_SHORT).show();
+        }
+
+        super.onConfigurationChanged(newConfig);
+    }
+
     /*
-       Das Hauptmenue zur Toolbar hinzufuegen
-       in 'res' menu werden die Toolbar - Aktion definiert
-    */
+           Das Hauptmenue zur Toolbar hinzufuegen
+           in 'res' menu werden die Toolbar - Aktion definiert
+        */
     @Override
     public boolean onCreateOptionsMenu(Menu menu)
     {
@@ -207,7 +294,8 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
        Toolbar - Aktionen abgefangen und via 'key' und
        FragmentResultListener an andere Fragmente gemeldet.
     */
-    @RequiresApi(api = Build.VERSION_CODES.O)
+
+    @RequiresApi(api = Build.VERSION_CODES.Q)
     @Override
     public boolean onOptionsItemSelected(MenuItem item)
     {
@@ -240,35 +328,39 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
                 mDataText.setText("");
                 return true;
 
-            case R.id.action_connections:
-
+            case R.id.start_accesspoint:
                 turnOnHotspot();
-
-                /*
-                if (mLocationPermissionApproved) {
-                    logToUi(getString(R.string.retrieving_access_points));
-                    wifiManager.startScan();
-
-                } else {
-                    logToUi("start Permission");
-                    // On 23+ (M+) devices, fine location permission not granted. Request permission.
-                    Intent startIntent = new Intent(this, LocationPermissionRequestActivity.class);
-                    startActivity(startIntent);
-                }
-
-                 */
-
-
-                //fragments.get(0).getChildFragmentManager().setFragmentResult("storeSocketKey", new Bundle());
                 break;
+
+            case R.id.stop_accesspoint:
+                turnOffHotspot();
+                break;
+
+            case R.id.wifi_connection:
+                new WifiTools().connect();
+                break;
+
         }
 
         return super.onOptionsItemSelected(item);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.Q)
+    private void cameraSnapShot()
+    {
+        // Ausloeser Sound
+        shootSound();
+
+        //Camera.Camera2Service.cameraSnapShot();
+        Camera.Camera2Service.camera2Service.cameraSnapShot();
+    }
+
+
     /**
+     *  Die eigenliche Kameraausloeserfunktion
      *
      */
+    @RequiresApi(api = Build.VERSION_CODES.P)
     private void snapShot()
     {
         // Ausloeser Sound
@@ -278,7 +370,19 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         {
             // eine neue Aufnahmeanforderung erzeugen und an die Kamera senden
             CameraCaptureSession cameraCaptureSession = Camera.Camera2Service.session;
-            cameraCaptureSession.capture(createSnapShotCaptureRequest(cameraCaptureSession), null, null);
+            //cameraCaptureSession.capture(createSnapShotCaptureRequest(cameraCaptureSession), null, null);
+
+            // Aufnahmeanforderung erstellen
+            CaptureRequest captureRequest = createSnapShotCaptureRequest(cameraCaptureSession);
+
+           // Integer sceneMode = captureRequest.get(CaptureRequest.CONTROL_SCENE_MODE);
+           // Integer distortion = captureRequest.get(CaptureRequest.DISTORTION_CORRECTION_MODE);
+
+            // Aufnahmeanforderung senden
+
+            //cameraCaptureSession.capture(captureRequest, null, null);
+            cameraCaptureSession.setRepeatingRequest(captureRequest, null, null);
+
         } catch (CameraAccessException e)
         {
             e.printStackTrace();
@@ -292,27 +396,6 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
      *
      *
      */
-
-    private final Handler mainThreadHandler = new Handler(Looper.getMainLooper());
-
-    @UiThread
-    private void postTaskWithHandlerOnMainThread() {
-        Runnable mainThreadTask = new Runnable() {
-            @Override
-            public void run() {
-
-                // since we use Looper.getMainLooper(), we can safely update the UI from here
-                //tv02.setText("Hi from Handler(Looper.getMainLooper()) post!");
-
-                Log.d(TAG, "[postTaskWithHandlerOnMainThread] Current looper is a main thread (UI) looper: "
-                        + (Looper.myLooper() == Looper.getMainLooper()));
-            }
-        };
-        mainThreadHandler.post(mainThreadTask);
-    }
-
-
-
 
     /**
      * Einen Verbindung zum S8 Server aufbauen.
@@ -347,6 +430,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
      */
     private ConnectionUseCase.ConnectionListener connectionListener = new ConnectionUseCase.ConnectionListener()
     {
+        @RequiresApi(api = Build.VERSION_CODES.P)
         @Override
         public void onConnectionEstablished(String remoteData)
         {
@@ -364,11 +448,11 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
                     {
                         snapshotCounter = counterVal;
 
-                        snapShot();
+                        //snapShot();
+                        cameraSnapShot();
 
                         Toast.makeText(MainActivity.this,
                                 "Snapshot: "+remoteData, Toast.LENGTH_LONG).show();
-
                     }
                 }
 
@@ -431,6 +515,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
      *
      * @param result String als heruntergeladener Wert
      */
+    @RequiresApi(api = Build.VERSION_CODES.P)
     @Override
     public void updateFromDownload(String result) {
         if (result != null) {
@@ -527,6 +612,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
      *
      * @return CaptureRequest zur Anforderung des Images
      */
+    @RequiresApi(api = Build.VERSION_CODES.P)
     public CaptureRequest createSnapShotCaptureRequest(CameraCaptureSession cameraCaptureSession)
     {
         try
@@ -541,6 +627,22 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
             // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
             //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
 
+
+            //Rect cropRectangle = new Rect(0, 0, 640, 480);
+            //captureRequestBuilder.set(SCALER_CROP_REGION, cropRectangle);
+
+            // Autofocus
+            //builder.set( CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+
+            // CONTROL_ZOOM_RATIO
+
+            //builder.set(CaptureRequest.DISTORTION_CORRECTION_MODE, CaptureRequest.DISTORTION_CORRECTION_MODE_FAST);
+            //Rect cropRectangle = new Rect(0, 0, 640, 480);
+            //Rect cropRectangle = new Rect(500, 375, 1500, 1125);
+            //builder.set(CaptureRequest.SCALER_CROP_REGION, cropRectangle);
+
+            Camera.Camera2Service.zoom.setZoom(builder,Camera.Camera2Service.zoomFaktor);
+
             return builder.build();
         } catch (CameraAccessException e)
         {
@@ -551,15 +653,16 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
 
 
 
-   /**
-    *
-    *
-    *
-    *       HotSpot Test
-    *
-    *
-    *
-    */
+
+    /**
+     *
+     *
+     *
+     *       HotSpot Test
+     *
+     *
+     *
+     */
 
     /**
      * prueft Netzwerkzugang
@@ -661,6 +764,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
 
     }
 
+    /*
     protected SurfaceHolder.Callback surfaceViewHolderCallback = new SurfaceHolder.Callback()
     {
         @Override
@@ -681,6 +785,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
 
         }
     };
+*/
 
 
 
