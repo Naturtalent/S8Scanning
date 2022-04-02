@@ -131,13 +131,14 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         //setContentView(R.layout.fragment_first);
 
         // ViewModel - Variante testen
-        final CameraViewModel viewModel = new ViewModelProvider(this).get(CameraViewModel.class);
+        //final CameraViewModel viewModel = new ViewModelProvider(this).get(CameraViewModel.class);
+        //viewModel.startCameraService(getApplication());
 
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-
+       // int deviceOrientation = getWindowManager().getDefaultDisplay().getRotation();
 
 
         //
@@ -160,14 +161,9 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         });
 
         // Instanziiert und startet den CameraService
-
-
-
-        //Intent intent = new Intent(MainActivity.this, Camera.Camera2Service.class);
-        //if(Camera.Camera2Service.camera2Service.viewSurfaceValid)
-          //  getApplicationContext().stopService(intent);
-
-         getApplicationContext().startService(new Intent(MainActivity.this, Camera.Camera2Service.class));
+        Intent myService = new Intent(MainActivity.this, Camera.Camera2Service.class);
+        startService(myService);
+        //getApplicationContext().startService(new Intent(MainActivity.this, Camera.Camera2Service.class));
 
 
 
@@ -200,10 +196,6 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         // Local Hotspot Test (momentan nicht unterstützt)
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
-
-        // Instanziiert und startet den CameraService
-        // Start der Kamera durch Callback onStartCommand() in Service
-        getApplicationContext().startService(new Intent(MainActivity.this, Camera.Camera2Service.class));
 
 
         //WifiTools wifiTools = new WifiTools();
@@ -247,6 +239,8 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     protected void onDestroy()
     {
         Log.e(TAG, "onDestroy()");
+        Intent myService = new Intent(MainActivity.this, Camera.Camera2Service.class);
+        stopService(myService);
         super.onDestroy();
 
     }
@@ -345,7 +339,6 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         return super.onOptionsItemSelected(item);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.Q)
     private void cameraSnapShot()
     {
         // Ausloeser Sound

@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
+import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -23,10 +24,16 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.util.Log;
+import android.util.Size;
+import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
+import android.view.WindowManager;
+import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -84,9 +91,45 @@ public class Camera
         private static Surface viewSurface;
 
         public static Zoom zoom;
-        public static float zoomFaktor = 4;
+        public static float zoomFaktor = 1;  // (1-4)
 
         public static Camera2Service camera2Service;
+        private int mTotalRotation;
+
+        private static SparseIntArray ORIENTATIONS = new SparseIntArray();
+        static {
+            ORIENTATIONS.append(Surface.ROTATION_0, 0);
+            ORIENTATIONS.append(Surface.ROTATION_90, 90);
+            ORIENTATIONS.append(Surface.ROTATION_180, 180);
+            ORIENTATIONS.append(Surface.ROTATION_270, 270);
+        }
+
+        /*
+        private TextureView mTextureView;
+        private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+            @Override
+            public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+                setupCamera(width, height);
+                connectCamera();
+            }
+
+            @Override
+            public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+
+            }
+
+            @Override
+            public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+                return false;
+            }
+
+            @Override
+            public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+
+            }
+        };
+
+         */
 
         /**
          *  Konstruktion des Service
@@ -97,45 +140,49 @@ public class Camera
          */
         public Camera2Service()
         {
-            camera2Service = this;
+                camera2Service = this;
 
-            SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
-            this.viewSurface = surfaceView.getHolder().getSurface();
+                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+                viewSurface = surfaceView.getHolder().getSurface();
 
-
-            surfaceView.getHolder().addCallback(new SurfaceHolder.Callback()
-            {
-            @Override
-            public void surfaceCreated(@NonNull SurfaceHolder holder)
-            {
-                Log.d(TAG, "Surface created-111");
                 readyCamera();
 
-            }
-
-            @Override
-            public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height)
-            {
-
-                Log.d(TAG, "Surface  changed");
-            }
-
-            @Override
-            public void surfaceDestroyed(@NonNull SurfaceHolder holder)
-            {
-                Log.d(TAG, "Surface destroyed-125");
-                if(cameraDevice != null)
+                /*
+                surfaceView.getHolder().addCallback(new SurfaceHolder.Callback()
                 {
-                    Log.d(TAG, "Surface destroyed- camera closes- 129");
-                    //cameraDevice.close();
-                    //session.close();
+                @Override
+                public void surfaceCreated(@NonNull SurfaceHolder holder)
+                {
+                    Log.d(TAG, "Surface created-111");
+                    //readyCamera();
+
                 }
 
+                @Override
+                public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height)
+                {
+
+                    Log.d(TAG, "Surface  changed");
+                }
+
+                @Override
+                public void surfaceDestroyed(@NonNull SurfaceHolder holder)
+                {
+                    Log.d(TAG, "Surface destroyed-125");
+                    if(cameraDevice != null)
+                    {
+                        Log.d(TAG, "Surface destroyed- camera closes- 129");
+                        //cameraDevice.close();
+                        //session.close();
+                    }
 
 
-            }
-            });
 
+                }
+                });
+
+
+                 */
 
 
 
@@ -233,10 +280,6 @@ public class Camera
             public void onConfigureFailed(@NonNull CameraCaptureSession session)
             {
             }
-
-
-
-
         };
 
         /**
@@ -291,18 +334,78 @@ public class Camera
                 // eine Kamera oeffnen
                 manager.openCamera(pickedCamera, cameraStateCallback, null);
 
+
+                ///////tests
+                StreamConfigurationMap configsMap = characteristics.get(
+                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+
+                /*
+                WindowManager windowManager = (WindowManager)MainActivity.context.getSystemService(Context.WINDOW_SERVICE);
+                int deviceOrientation = 0;
+                if(windowManager != null)
+                    deviceOrientation = windowManager.getDefaultDisplay().getRotation();
+                mTotalRotation = sensorToDeviceRotation(characteristics, deviceOrientation);
+                boolean swapRotation = mTotalRotation == 90 || mTotalRotation == 270;
+                int rotatedWidth = width;
+                int rotatedHeight = height;
+                if(swapRotation) {
+                    rotatedWidth = height;
+                    rotatedHeight = width;
+                }
+                */
+
+
+                int[] formats = configsMap.getOutputFormats();
+                Size[]sizes = configsMap.getOutputSizes(formats[0]);
+
+                Size[]sizesSurfaceView = configsMap.getOutputSizes(SurfaceView.class);
+
+                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+                LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) surfaceView.getLayoutParams();
+                //Object lo = surfaceView.getLayoutParams();
+                lp.width = 648;
+                surfaceView.setLayoutParams(lp);
+
+
+                sizes = configsMap.getOutputSizes(formats[1]);
+                sizes = configsMap.getOutputSizes(formats[2]);
+                int format = formats[2];
+                Size size = configsMap.getOutputSizes(format)[6];
+
+
+
+
+                ///////
+
+
                 // ein 'SpeicherSurface' zur aufnahme der aufgenommenen Images
-                imageReader = ImageReader.newInstance(1920, 1088, ImageFormat.JPEG, 2 /* images buffered */);
+                imageReader = ImageReader.newInstance(1920, 1080, ImageFormat.JPEG, 2 /* images buffered */);
                 imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
                 Log.d(TAG, "readyCamera - imageReader created");
 
                 // eine Zoomklasse generieren, ueber die das Zoomen gesteuert wird
                 zoom = new Zoom(characteristics);
 
+
+
+
+
+
+
+
+
+
+
             } catch (CameraAccessException e)
             {
                 Log.e(TAG, "Line 276 " + e.getMessage());
             }
+        }
+
+        private static int sensorToDeviceRotation(CameraCharacteristics cameraCharacteristics, int deviceOrientation) {
+            int sensorOrienatation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            deviceOrientation = ORIENTATIONS.get(deviceOrientation);
+            return (sensorOrienatation + deviceOrientation + 360) % 360;
         }
 
         private void openCamera()
@@ -392,14 +495,25 @@ public class Camera
         @Override
         public void onDestroy()
         {
+
+            cameraDevice.close();
+
+            /*
             try
             {
+                Log.e(TAG, "Service beenden");
                 session.abortCaptures();
+                viewSurface.release();
+                imageReader.close();
+                cameraDevice.close();
+                Log.e(TAG, "Service beenden 2");
             } catch (CameraAccessException e)
             {
                 Log.e(TAG, "Line 367 "+e.getMessage());
             }
-            session.close();
+            //session.close();
+
+             */
         }
 
 
@@ -461,7 +575,7 @@ public class Camera
         /**
          *
          */
-        @RequiresApi(api = Build.VERSION_CODES.Q)
+        //@RequiresApi(api = Build.VERSION_CODES.Q)
         public void cameraSnapShot()
         {
             try
@@ -485,13 +599,12 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
-        @RequiresApi(api = Build.VERSION_CODES.Q)
         protected CaptureRequest createViewerCaptureRequest()
         {
                 try
                 {
                     // eine vordefinierte Schablone beutzen
-                    CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+                    CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
 
                     // ImageReader - Puffer hinzufuegen
                     //builder.addTarget(imageReader.getSurface());
@@ -516,7 +629,7 @@ public class Camera
                     // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
                     //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
 
-                    zoom.setZoom(builder, zoomFaktor);
+                    zoom.setZoom(builder, zoomFaktor); // see createSnapShotCaptureRequest()
 
                     return builder.build();
                 } catch (CameraAccessException e)
@@ -534,7 +647,7 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
-        public static CaptureRequest createSnapShotCaptureRequest()
+        private CaptureRequest createSnapShotCaptureRequest()
         {
             try
             {
@@ -551,7 +664,7 @@ public class Camera
                 // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
                 //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
 
-                zoom.setZoom(builder,zoomFaktor);
+                //zoom.setZoom(builder,zoomFaktor);
 
                 return builder.build();
             } catch (CameraAccessException e)
