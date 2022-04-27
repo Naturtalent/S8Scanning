@@ -11,6 +11,9 @@ public class AutoFitSurfaceView extends SurfaceView
     private int mRatioWidth = 0;
     private int mRatioHeight = 0;
 
+    public int width = 0;
+    public int height = 0;
+
     public AutoFitSurfaceView(Context context) {
             this(context, null);
     }
@@ -43,18 +46,24 @@ public class AutoFitSurfaceView extends SurfaceView
         @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-            int width = MeasureSpec.getSize(widthMeasureSpec);
-            int height = MeasureSpec.getSize(heightMeasureSpec);
+            width = MeasureSpec.getSize(widthMeasureSpec);
+            height = MeasureSpec.getSize(heightMeasureSpec);
             if (0 == mRatioWidth || 0 == mRatioHeight) {
                 setMeasuredDimension(width, height);
             } else {
                 if (width < height * mRatioWidth / mRatioHeight) {
-                    setMeasuredDimension(width, width * mRatioHeight / mRatioWidth);
+                    setMeasuredDimension(width, width * mRatioHeight / mRatioWidth);        // Portrait
                 } else {
-                    setMeasuredDimension(height * mRatioWidth / mRatioHeight, height);
+                    setMeasuredDimension(height * mRatioWidth / mRatioHeight, height);      // Landscape
                 }
             }
         }
+
+    protected void onFinishInflate()
+    {
+
+        super.onFinishInflate();
+    }
 }
 
 

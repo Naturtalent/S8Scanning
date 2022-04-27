@@ -12,7 +12,7 @@ import androidx.core.math.MathUtils;
 public class Zoom
 {
 
-    private static final float DEFAULT_ZOOM_FACTOR = 1.0f;
+    public static final float DEFAULT_ZOOM_FACTOR = 1.0f;
 
     @NonNull
     private final Rect mCropRegion = new Rect();

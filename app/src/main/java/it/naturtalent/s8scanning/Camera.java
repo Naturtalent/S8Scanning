@@ -7,16 +7,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
-import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -31,12 +28,13 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
-import android.widget.RelativeLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.app.ActivityCompat;
 
 import java.io.File;
@@ -44,7 +42,10 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class Camera
@@ -88,6 +89,7 @@ public class Camera
         //protected Activity activity;
         protected CameraCharacteristics characteristics;
 
+        private AutoFitSurfaceView surfaceView;
         private static Surface viewSurface;
 
         public static Zoom zoom;
@@ -95,6 +97,12 @@ public class Camera
 
         public static Camera2Service camera2Service;
         private int mTotalRotation;
+
+        private File mImageFolder;
+        private String mCameraId;
+        private String mImageFileName;
+
+        private Size mPreviewSize;
 
         private static SparseIntArray ORIENTATIONS = new SparseIntArray();
         static {
@@ -104,13 +112,24 @@ public class Camera
             ORIENTATIONS.append(Surface.ROTATION_270, 270);
         }
 
-        /*
+        private static class CompareSizeByArea implements Comparator<Size>
+        {
+            @Override
+            public int compare(Size lhs, Size rhs) {
+                return Long.signum( (long)(lhs.getWidth() * lhs.getHeight()) -
+                        (long)(rhs.getWidth() * rhs.getHeight()));
+            }
+        }
+
+
+/*
         private TextureView mTextureView;
         private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
                 setupCamera(width, height);
-                connectCamera();
+                //connectCamera();
+
             }
 
             @Override
@@ -128,8 +147,7 @@ public class Camera
 
             }
         };
-
-         */
+ */
 
         /**
          *  Konstruktion des Service
@@ -142,8 +160,65 @@ public class Camera
         {
                 camera2Service = this;
 
-                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+                surfaceView = (AutoFitSurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
                 viewSurface = surfaceView.getHolder().getSurface();
+
+                //AutoFitSurfaceView autoFitSurfaceView = (AutoFitSurfaceView)surfaceView;
+                // surfaceView.setAspectRatio(4,3);
+                // surfaceView.setAspectRatio(1,1);
+                surfaceView.setAspectRatio(16,9);
+
+
+            surfaceView.getHolder().addCallback(new SurfaceHolder.Callback()
+            {
+                @Override
+                public void surfaceCreated(@NonNull SurfaceHolder holder)
+                {
+
+                    //Log.e(TAG, "SurfaceHolder created - openCamera");
+                    //setupCamera(surfaceView.width, surfaceView.height);
+                    //readyCamera();
+
+                }
+
+                @Override
+                public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height)
+                {
+                    Log.e(TAG, "SurfaceHolder changed");
+
+                    //setupCamera(surfaceView.width, surfaceView.height);
+                    setupCamera(width, height);
+                    //readyCamera();
+                }
+
+                @Override
+                public void surfaceDestroyed(@NonNull SurfaceHolder holder)
+                {
+                    Log.e(TAG, "SurfaceHolder destroyed");
+                    //cameraDevice.close();
+                }
+            });
+
+
+            /*
+            surfaceView.addOnLayoutChangeListener(new View.OnLayoutChangeListener()
+            {
+                @Override
+                public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom)
+                {
+                    AutoFitSurfaceView autoFitSurfaceView = (AutoFitSurfaceView)surfaceView;
+                    setupCamera(autoFitSurfaceView.width, autoFitSurfaceView.height);
+                    //readyCamera();
+                    Log.d(TAG, "LayoutChange");
+                }
+            });
+
+             */
+
+
+
+                //AutoFitSurfaceView autoFitSurfaceView = (AutoFitSurfaceView)surfaceView;
+                //autoFitSurfaceView.setAspectRatio(4,3);
 
                 readyCamera();
 
@@ -214,7 +289,7 @@ public class Camera
             @Override
             public void onOpened(@NonNull CameraDevice camera)
             {
-                Log.d(TAG, "CameraDevice.StateCallback onOpened");
+                Log.e(TAG, "CameraDevice.StateCallback onOpened");
                 cameraDevice = camera;
                 actOnReadyCameraDevice();
             }
@@ -222,7 +297,7 @@ public class Camera
             @Override
             public void onDisconnected(@NonNull CameraDevice camera)
             {
-                Log.w(TAG, "CameraDevice.StateCallback onDisconnected");
+                Log.e(TAG, "CameraDevice.StateCallback disconnected");
             }
 
             @Override
@@ -259,7 +334,7 @@ public class Camera
 
 
                     cameraCaptureStartTime = System.currentTimeMillis();
-                    session.capture(createSnapShotCaptureRequest(), null, null);
+                    //session.capture(createImageCaptureRequest(), null, null);
 
                     Log.d(TAG, "CameraCaptureSession.StateCallback - onReaddy");
 
@@ -328,8 +403,12 @@ public class Camera
                     return;
                 }
 
+
+
                 // Id der gewaehlte Kamera (front/back) ermitteln
                 String pickedCamera = getCamera(manager);
+
+
 
                 // eine Kamera oeffnen
                 manager.openCamera(pickedCamera, cameraStateCallback, null);
@@ -339,7 +418,12 @@ public class Camera
                 StreamConfigurationMap configsMap = characteristics.get(
                         CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
-                /*
+               // SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+               // AutoFitSurfaceView autoFitSurfaceView = (AutoFitSurfaceView)surfaceView;
+               // Log.e(TAG, "width: "+autoFitSurfaceView.width+"        height:"+autoFitSurfaceView.height);
+
+
+/*
                 WindowManager windowManager = (WindowManager)MainActivity.context.getSystemService(Context.WINDOW_SERVICE);
                 int deviceOrientation = 0;
                 if(windowManager != null)
@@ -352,14 +436,17 @@ public class Camera
                     rotatedWidth = height;
                     rotatedHeight = width;
                 }
-                */
+
+ */
 
 
-                int[] formats = configsMap.getOutputFormats();
-                Size[]sizes = configsMap.getOutputSizes(formats[0]);
 
-                Size[]sizesSurfaceView = configsMap.getOutputSizes(SurfaceView.class);
+               // int[] formats = configsMap.getOutputFormats();
+               // Size[]sizes = configsMap.getOutputSizes(formats[0]);
 
+                //Size[]sizesSurfaceView = configsMap.getOutputSizes(SurfaceView.class);
+
+                /*
                 SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
                 LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) surfaceView.getLayoutParams();
                 //Object lo = surfaceView.getLayoutParams();
@@ -371,6 +458,8 @@ public class Camera
                 sizes = configsMap.getOutputSizes(formats[2]);
                 int format = formats[2];
                 Size size = configsMap.getOutputSizes(format)[6];
+
+                 */
 
 
 
@@ -399,6 +488,55 @@ public class Camera
             } catch (CameraAccessException e)
             {
                 Log.e(TAG, "Line 276 " + e.getMessage());
+            }
+        }
+
+        private void setupCamera(int width, int height) {
+
+            CameraManager manager = (CameraManager) MainActivity.context.getApplicationContext().getSystemService(Context.CAMERA_SERVICE);
+            mCameraId = getCamera(manager);
+
+            /*
+            SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+            int height = surfaceView.getHeight();
+            int width = surfaceView.getWidth();
+
+
+
+            AutoFitSurfaceView autoFitSurfaceView = (AutoFitSurfaceView)surfaceView;
+            Log.e(TAG, "width: "+autoFitSurfaceView.width+"        height:"+autoFitSurfaceView.height);
+
+             */
+
+            StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            int deviceOrientation = MainActivity.activity.getWindowManager().getDefaultDisplay().getRotation();
+            mTotalRotation = sensorToDeviceRotation(characteristics, deviceOrientation);
+            boolean swapRotation = mTotalRotation == 90 || mTotalRotation == 270;
+            int rotatedWidth = width;
+            int rotatedHeight = height;
+            if(swapRotation) {
+                rotatedWidth = height;
+                rotatedHeight = width;
+            }
+
+            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), rotatedWidth, rotatedHeight);
+
+            Log.e(TAG, "rotation:"+swapRotation+"  mPrevW/mPrevH: "+mPreviewSize.getWidth()+"/"+mPreviewSize.getHeight() + "width/height:"+width+"/"+height);
+        }
+
+
+        private static Size chooseOptimalSize(Size[] choices, int width, int height) {
+            List<Size> bigEnough = new ArrayList<Size>();
+            for(Size option : choices) {
+                if(option.getHeight() == option.getWidth() * height / width &&
+                        option.getWidth() >= width && option.getHeight() >= height) {
+                    bigEnough.add(option);
+                }
+            }
+            if(bigEnough.size() > 0) {
+                return Collections.min(bigEnough, new CompareSizeByArea());
+            } else {
+                return choices[0];
             }
         }
 
@@ -496,6 +634,8 @@ public class Camera
         public void onDestroy()
         {
 
+
+            Log.e(TAG, "Camera Destroy");
             cameraDevice.close();
 
             /*
@@ -530,9 +670,16 @@ public class Camera
             boolean success = false;
             //File file = new File(Environment.getExternalStorageDirectory() + "/Pictures/image.jpg");
 
-            String fileName = "/image"+new Integer(MainActivity.snapshotCounter).toString()+".jpg";
-            File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + fileName);
+
+            File file = createImageFileName();
+            Log.e(TAG, "Create ImageFolder: "+mImageFolder);
+
+            //String fileName = "/image"+Integer.valueOf(MainActivity.snapshotCounter).toString()+".jpg";
+            //File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + fileName);
             //File file  = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + "/image.jpg");
+
+
+            Log.e(TAG, "Save Image: "+file.toString());
 
             FileOutputStream output = null;
 
@@ -545,8 +692,7 @@ public class Camera
                 {
                     output = new FileOutputStream(file);
                     output.write(bytes);    // write the byte array to file
-                    //j++;
-                    success = true;
+
                 } catch (FileNotFoundException e)
                 {
                     e.printStackTrace();
@@ -572,6 +718,26 @@ public class Camera
         }
 
 
+        private File createImageFileName() {
+            //String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            //String prepend = "IMAGE_" + timestamp + "_";
+
+            String prepend = "IMAGE_" + Integer.valueOf(MainActivity.snapshotCounter).toString()+".jpg";
+
+            File imageFile = new File(createImageFolder(), prepend);
+            mImageFileName = imageFile.getAbsolutePath();
+            return imageFile;
+        }
+
+        private File createImageFolder() {
+            File imageFile = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            mImageFolder = new File(imageFile, "S8VideoImage");
+            if(!mImageFolder.exists()) {
+                mImageFolder.mkdirs();
+            }
+            return mImageFolder;
+        }
+
         /**
          *
          */
@@ -580,17 +746,50 @@ public class Camera
         {
             try
             {
-                session.stopRepeating();
+                //session.stopRepeating();
 
-                session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+                CaptureRequest request = createImageCaptureRequest();
+                Log.e(TAG, "SnapShot1");
 
-                session.setRepeatingRequest(createSnapShotCaptureRequest(), null, null);
+                session.capture(request, null, null);
+
+                //session.setRepeatingRequest(createSnapShotCaptureRequest(), null, null);
+
+                //session.stopRepeating();
 
             } catch (CameraAccessException e)
             {
+                Log.e(TAG, "SnapShotError");
                 e.printStackTrace();
             }
         }
+
+        /*
+        public void cameraSnapShot()
+        {
+            try
+            {
+                //session.stopRepeating();
+
+                session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+
+                CaptureRequest request = createImageCaptureRequest();
+                Log.e(TAG, "SnapShot1");
+
+                session.setRepeatingRequest(request, null, null);
+
+                //session.setRepeatingRequest(createSnapShotCaptureRequest(), null, null);
+
+                session.stopRepeating();
+
+            } catch (CameraAccessException e)
+            {
+                Log.e(TAG, "SnapShotError");
+                e.printStackTrace();
+            }
+        }
+
+         */
 
 
         /**
@@ -599,7 +798,7 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
-        protected CaptureRequest createViewerCaptureRequest()
+        public static CaptureRequest createViewerCaptureRequest()
         {
                 try
                 {
@@ -611,6 +810,23 @@ public class Camera
 
                     // ViewSurface - Puffer hinzufuegen
                     SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+
+
+
+                    /*
+                    CoordinatorLayout.LayoutParams lp = (CoordinatorLayout.LayoutParams) surfaceView.getLayoutParams();
+                    lp.width = mPreviewSize.getWidth();
+                    lp.height = mPreviewSize.getHeight();
+                    surfaceView.setLayoutParams(lp);
+
+                     */
+
+
+
+
+
+
+
                     builder.addTarget(surfaceView.getHolder().getSurface());
 
                 /*
@@ -647,7 +863,7 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
-        private CaptureRequest createSnapShotCaptureRequest()
+        private CaptureRequest createImageCaptureRequest()
         {
             try
             {
@@ -664,7 +880,7 @@ public class Camera
                 // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
                 //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
 
-                //zoom.setZoom(builder,zoomFaktor);
+                zoom.setZoom(builder,zoomFaktor);
 
                 return builder.build();
             } catch (CameraAccessException e)

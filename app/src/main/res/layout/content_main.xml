@@ -5,37 +5,16 @@
     android:layout_height="match_parent"
     app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <LinearLayout
-        android:orientation="vertical"
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent">
 
-        <TextView
-            android:id="@+id/intro_text"
-            android:layout_width="match_parent"
-            android:layout_height="275dp"
-            android:layout_weight="1"
-            android:freezesText="true"
-            android:text="@string/welcome_message"
-            android:textSize="16sp" />
 
-        <SurfaceView
+        <it.naturtalent.s8scanning.AutoFitSurfaceView
             android:id="@+id/surfaceView"
             android:layout_width="match_parent"
-            android:layout_height="304dp" />
+            android:layout_height="match_parent" />
 
-        <View
-            android:layout_width="fill_parent"
-            android:layout_height="13dp"
-            android:background="@android:color/darker_gray" />
-        <TextView
-            android:id="@+id/data_text"
-            android:layout_weight="1"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:freezesText="true"/>
 
-    </LinearLayout>
+
+
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

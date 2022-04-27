@@ -3,6 +3,7 @@ package it.naturtalent.s8scanning;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -55,6 +56,7 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -66,6 +68,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.net.ssl.HttpsURLConnection;
+
+import Dialogs.ZoomDialog;
 
 /**
  *
@@ -102,6 +106,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     // Camera-Ausloeser Klick
     private MediaPlayer _shootMP;
 
+    private ZoomDialog zoomDialog;
 
 
 
@@ -109,10 +114,15 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     private boolean fetchDataEnable = false;
     public static int snapshotCounter = 0;
 
+    private TextView tvProgressLabel;
 
     // LocalHotspot Variable
     WifiConfiguration currentConfig;
     WifiManager.LocalOnlyHotspotReservation hotspotReservation;
+
+
+
+
 
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -121,7 +131,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     {
         super.onCreate(savedInstanceState);
 
-        Log.e(TAG, "onCreate");
+        //Log.e(TAG, "onCreate");
 
         // Energisparmodus abschalten
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -139,6 +149,25 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         setSupportActionBar(toolbar);
 
        // int deviceOrientation = getWindowManager().getDefaultDisplay().getRotation();
+
+        zoomDialog = new ZoomDialog(this, new ZoomDialog.ZoomDialogListener()
+        {
+            @Override
+            public void ready(float zoomValue)
+            {
+                //Camera.Camera2Service.zoomFaktor = zoomValue;
+                //Camera.Camera2Service.createViewerCaptureRequest();
+            }
+
+            @Override
+            public void cancelled()
+            {
+
+            }
+        });
+
+
+
 
 
         //
@@ -201,13 +230,67 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         //WifiTools wifiTools = new WifiTools();
         //wifiTools.connect();
 
+        /*
+        SeekBar seekBar = findViewById(R.id.seekBar);
+        seekBar.setOnSeekBarChangeListener(seekBarChangeListener);
+        int progress = seekBar.getProgress();
+        tvProgressLabel = findViewById(R.id.textView);
+        tvProgressLabel.setText("Progress: " + progress);
+         */
+
 
     }
 
+    /*
+    SeekBar.OnSeekBarChangeListener seekBarChangeListener = new SeekBar.OnSeekBarChangeListener() {
 
+        @Override
+        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            // updated continuously as the user slides the thumb
+            tvProgressLabel.setText("Progress: " + progress);
+        }
 
+        @Override
+        public void onStartTrackingTouch(SeekBar seekBar) {
+            // called when the user first touches the SeekBar
+        }
 
+        @Override
+        public void onStopTrackingTouch(SeekBar seekBar) {
+            // called after the user finishes moving the SeekBar
+        }
+    };
 
+     */
+
+    private Dialog createZoomDialog()
+    {
+        Dialog dialog;
+
+        String[] types = {"By Zip", "By Category"};
+
+        dialog = new AlertDialog.Builder(this)
+                .setItems(types, new DialogInterface.OnClickListener()
+                {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which)
+                    {
+                        dialog.dismiss();
+                        switch(which)
+                        {
+                            case 0:
+                                //onZipRequested();
+                                break;
+                            case 1:
+                                //onCategoryRequested();
+                                break;
+                        }
+                    }
+                })
+                .create();
+        dialog.setTitle("Zoom");
+        return dialog;
+      };
 
     /**
      * Beim Starten der App wird eine Http Verbindung zum S8 Server aufgebaut
@@ -222,7 +305,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     @Override
     protected void onResume()
     {
-        Log.d(TAG, "onResume()");
+        //Log.d(TAG, "onResume()");
         super.onResume();
 
     }
@@ -230,7 +313,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     @Override
     protected void onPause()
     {
-        Log.d(TAG, "onPause()");
+        //Log.d(TAG, "onPause()");
         super.onPause();
 
     }
@@ -238,7 +321,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     @Override
     protected void onDestroy()
     {
-        Log.e(TAG, "onDestroy()");
+        //Log.e(TAG, "onDestroy()");
         Intent myService = new Intent(MainActivity.this, Camera.Camera2Service.class);
         stopService(myService);
         super.onDestroy();
@@ -260,7 +343,7 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig)
     {
-        Log.e(TAG, "onConfigurationChanged");
+        //Log.e(TAG, "onConfigurationChanged");
 
         // Checks the orientation of the screen
         if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -321,6 +404,12 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
                 finishDownloading();
                 mDataText.setText("");
                 return true;
+
+            case R.id.camera_zoom:
+
+                zoomDialog.show();
+                //createZoomDialog().show();
+                break;
 
             case R.id.start_accesspoint:
                 turnOnHotspot();
