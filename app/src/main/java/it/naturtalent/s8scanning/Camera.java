@@ -13,14 +13,18 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
+import android.preference.PreferenceManager;
 import android.util.Log;
+import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
@@ -31,6 +35,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -81,19 +86,20 @@ public class Camera
         protected static final String TAG = "myLog";
         protected static final int CAMERACHOICE = CameraCharacteristics.LENS_FACING_BACK;
         protected static long cameraCaptureStartTime;
-        protected static CameraDevice cameraDevice;
+        public static CameraDevice cameraDevice;
         public static CameraCaptureSession session;
         public static ImageReader imageReader;
         protected SurfaceHolder surfaceHolder;
 
         //protected Activity activity;
-        protected CameraCharacteristics characteristics;
+        public static CameraCharacteristics characteristics;
 
-        private AutoFitSurfaceView surfaceView;
+        public static AutoFitSurfaceView surfaceView;
         private static Surface viewSurface;
 
         public static Zoom zoom;
-        public static float zoomFaktor = 1;  // (1-4)
+        //public static float zoomFaktor = 1;  // (1-4)
+        public static float zoomFactor = Zoom.DEFAULT_ZOOM_FACTOR;
 
         public static Camera2Service camera2Service;
         private int mTotalRotation;
@@ -103,6 +109,12 @@ public class Camera
         private String mImageFileName;
 
         private Size mPreviewSize;
+        public static double mExposureTimesISO;
+
+        //public static CaptureRequest.Builder preViewBuilder;
+
+        //public static int curExposureProgress;
+
 
         private static SparseIntArray ORIENTATIONS = new SparseIntArray();
         static {
@@ -297,12 +309,15 @@ public class Camera
             @Override
             public void onDisconnected(@NonNull CameraDevice camera)
             {
+                cameraDevice.close();
                 Log.e(TAG, "CameraDevice.StateCallback disconnected");
             }
 
             @Override
             public void onError(@NonNull CameraDevice camera, int error)
             {
+                cameraDevice.close();
+                cameraDevice = null;
                 Log.e(TAG, "CameraDevice.StateCallback onError " + error);
             }
 
@@ -330,7 +345,9 @@ public class Camera
                     //session.setRepeatingRequest(createCaptureRequest(), null, null);
 
                     // session.abortCaptures();
-                     session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+                    // session.setRepeatingRequest(createViewerCaptureRequest(), null, null);
+                    //session.setRepeatingRequest(createViewerCaptureRequest(), sessionCaptureCallback, null);
+                    session.setRepeatingRequest(getPreViewBuilder().build(), sessionCaptureCallback, null);
 
 
                     cameraCaptureStartTime = System.currentTimeMillis();
@@ -357,10 +374,20 @@ public class Camera
             }
         };
 
+        protected CameraCaptureSession.CaptureCallback sessionCaptureCallback = new CameraCaptureSession.CaptureCallback()
+        {
+            @Override
+            public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result)
+            {
+                super.onCaptureCompleted(session, request, result);
+                mExposureTimesISO = (double) (result.get(TotalCaptureResult.SENSOR_SENSITIVITY) * result.get(TotalCaptureResult.SENSOR_EXPOSURE_TIME));
+            }
+        };
+
         /**
          *  Einen 'onImageAvailableListener' erstellen.
          *  Der Listener wird aufgerufen, wenn ein neues Image verfügbar ist.
-         *  In der 'setCamera() - Funktion wird dieser Listener dem ImageReader zugeordnet
+         *  In der 'readyCamera() - Funktion wird dieser Listener dem ImageReader zugeordnet
          */
         protected ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener()
         {
@@ -403,16 +430,11 @@ public class Camera
                     return;
                 }
 
-
-
                 // Id der gewaehlte Kamera (front/back) ermitteln
                 String pickedCamera = getCamera(manager);
 
-
-
                 // eine Kamera oeffnen
                 manager.openCamera(pickedCamera, cameraStateCallback, null);
-
 
                 ///////tests
                 StreamConfigurationMap configsMap = characteristics.get(
@@ -460,30 +482,18 @@ public class Camera
                 Size size = configsMap.getOutputSizes(format)[6];
 
                  */
-
-
-
-
                 ///////
 
 
-                // ein 'SpeicherSurface' zur aufnahme der aufgenommenen Images
+                // imageReader - ein 'SpeicherSurface' zur aufnahme der aufgenommenen Images
                 imageReader = ImageReader.newInstance(1920, 1080, ImageFormat.JPEG, 2 /* images buffered */);
+
+                // Listener wird aufgerufen, wenn eine Aufnahme (Image) zur Verfuegung steht
                 imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
                 Log.d(TAG, "readyCamera - imageReader created");
 
                 // eine Zoomklasse generieren, ueber die das Zoomen gesteuert wird
                 zoom = new Zoom(characteristics);
-
-
-
-
-
-
-
-
-
-
 
             } catch (CameraAccessException e)
             {
@@ -621,6 +631,7 @@ public class Camera
             {
                 // hier werden die Puffer (ImageReaderSurface und ViewSurface) hinzugefuegt
                 cameraDevice.createCaptureSession(Arrays.asList(imageReader.getSurface(), viewSurface), sessionStateCallback, null);
+                
             } catch (CameraAccessException e)
             {
                 Log.e(TAG, "Line 352 "+e.getMessage());
@@ -739,8 +750,44 @@ public class Camera
         }
 
         /**
+         * einen Schappschuss ausloesen
+         */
+        public void cameraSnapShot()
+        {
+
+            CaptureRequest.Builder imageBuilder = getImageCaptureBuilder();
+            setImageRequest(imageBuilder);
+
+
+            /*
+            try
+            {
+                CaptureRequest request = createImageCaptureRequest();
+                Log.e(TAG, "SnapShot1");
+
+                session.capture(request, null, null);
+
+                //session.setRepeatingRequest(createSnapShotCaptureRequest(), null, null);
+
+                //session.stopRepeating();
+
+            } catch (CameraAccessException e)
+            {
+                Log.e(TAG, "SnapShotError");
+                e.printStackTrace();
+            }
+
+             */
+
+
+
+        }
+
+
+        /**
          *
          */
+        /*
         //@RequiresApi(api = Build.VERSION_CODES.Q)
         public void cameraSnapShot()
         {
@@ -763,6 +810,8 @@ public class Camera
                 e.printStackTrace();
             }
         }
+
+         */
 
         /*
         public void cameraSnapShot()
@@ -798,7 +847,129 @@ public class Camera
          *
          * @return CaptureRequest zur Anforderung des Images
          */
+        @RequiresApi(api = Build.VERSION_CODES.P)
         public static CaptureRequest createViewerCaptureRequest()
+        {
+            try
+            {
+                // eine vordefinierte Schablone beutzen
+                CaptureRequest.Builder preViewBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+
+                // ViewSurface - Puffer hinzufuegen
+                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+
+                preViewBuilder.addTarget(surfaceView.getHolder().getSurface());
+
+                //preViewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                //preViewBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+
+
+
+                return preViewBuilder.build();
+            } catch (CameraAccessException e)
+            {
+                Log.e(TAG, e.getMessage());
+                return null;
+            }
+
+        }
+
+        /**
+         * Einen Builder fuer den VorschauView generieren
+         *
+         * @return
+         */
+        public static CaptureRequest.Builder getPreViewBuilder()
+        {
+            try
+            {
+                CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+
+                // ViewSurface - Puffer hinzufuegen
+                SurfaceView surfaceView = (SurfaceView) MainActivity.activity.findViewById(R.id.surfaceView);
+
+                builder.addTarget(surfaceView.getHolder().getSurface());
+
+                // Parameter des Buildes setzen
+                setBuilderSettings(builder);
+
+                builder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+
+                return builder;
+
+            } catch (CameraAccessException e)
+            {
+                e.printStackTrace();
+            }
+
+            return null;
+        }
+
+        public static void setPreViewRepeatingRequest(CaptureRequest.Builder previewBuilder)
+        {
+            CaptureRequest  captureRequest = previewBuilder.build();
+            try
+            {
+                session.stopRepeating();
+                session.setRepeatingRequest(captureRequest, null, null);
+            } catch (CameraAccessException e)
+            {
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         *  setzt die Parameter der beiden Builder (preview und image)
+         */
+        private static void setBuilderSettings(CaptureRequest.Builder builder)
+        {
+            zoom.setZoom(builder, zoomFactor); // see createSnapShotCaptureRequest()
+        }
+
+        /**
+         * Einen Builder fuer den ImageRequest generieren
+         *
+         * @return
+         */
+        public static CaptureRequest.Builder getImageCaptureBuilder()
+        {
+            try
+            {
+                // eine verdefinierte Schablone beutzen
+                CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_VIDEO_SNAPSHOT);
+
+                // ImageReader - Puffer hinzufuegen
+                builder.addTarget(imageReader.getSurface());
+
+                // Parameter des Buildes setzen
+                setBuilderSettings(builder);
+
+                builder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+
+                return builder;
+
+            } catch (CameraAccessException e)
+            {
+                Log.e(TAG, e.getMessage());
+                return null;
+            }
+        }
+
+        public static void setImageRequest(CaptureRequest.Builder imageBuilder)
+        {
+            CaptureRequest  captureRequest = imageBuilder.build();
+            try
+            {
+                //session.stopRepeating();
+                session.capture(captureRequest, null, null);
+            } catch (CameraAccessException e)
+            {
+                e.printStackTrace();
+            }
+        }
+
+        @RequiresApi(api = Build.VERSION_CODES.P)
+        public static CaptureRequest createViewerCaptureRequestORG()
         {
                 try
                 {
@@ -821,31 +992,65 @@ public class Camera
 
                      */
 
+                    //builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
+                    //builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
+                    //builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
+                    //builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, .2f);
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1000000L);
 
-
-
-
+                    //builder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
 
 
                     builder.addTarget(surfaceView.getHolder().getSurface());
 
-                /*
-                surfaceView.addOnLayoutChangeListener(new View.OnLayoutChangeListener()
-                {
-                    @Override
-                    public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom)
-                    {
-                        Log.e(TAG, "ViewSurface changed");
-                    }
-                });
 
-                 */
+
+
+
+                    // bestes ergebnis bisher
+
+                    builder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+
+                    //builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 50000000L);
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 60000000L);
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 90000000L);
+
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 400000000L);
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 6000000000L);
+                    //builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1000000000L);
+
+
+                    // 0,3 - 10.0
+                    builder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
+                    float yourMinFocus = characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
+                    float yourMaxFocus = characteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE);
+                    builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.0f);
+                    //builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 1.8f);
+                    //builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.8f);
+                    //builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 1.0f);
+
+                    //builder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+                    ////builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
+
+
 
 
                     // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
-                    //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
+                    // builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
+                    // Key see CaptureRequest (Fields) - Value see CameraCharacteristics
 
-                    zoom.setZoom(builder, zoomFaktor); // see createSnapShotCaptureRequest()
+                    //builder.setPhysicalCameraKey(CaptureRequest.CONTROL_MODE, CameraCharacteristics.CONTROL_MODE_OFF, cameraDevice.getId());
+
+                    // Autobelichtung AE (auto-exposure) ausschalten
+                    //builder.setPhysicalCameraKey(CaptureRequest.CONTROL_AE_MODE, CameraCharacteristics.CONTROL_AE_MODE_OFF, cameraDevice.getId());
+
+                    // Autofokus AF ausschalten
+                    //builder.setPhysicalCameraKey(CaptureRequest.CONTROL_AF_MODE, CameraCharacteristics.CONTROL_AF_MODE_OFF, cameraDevice.getId());
+
+                    //zoom.setZoom(builder, zoomFaktor); // see createSnapShotCaptureRequest()
+
+
 
                     return builder.build();
                 } catch (CameraAccessException e)
@@ -855,6 +1060,8 @@ public class Camera
                 }
 
         }
+
+
 
 
         /**
@@ -880,7 +1087,7 @@ public class Camera
                 // ein CaptureRequest-Feld auf einen Wert setzen (gueltige Definitionen @see CaptureRequest)
                 //builder.setPhysicalCameraKey(Key<T>, T value, cameraID)
 
-                zoom.setZoom(builder,zoomFaktor);
+                //zoom.setZoom(builder,zoomFaktor);
 
                 return builder.build();
             } catch (CameraAccessException e)
@@ -946,6 +1153,42 @@ public class Camera
             //List<CaptureResult.Key<?>> characteristicsKeys = characteristics.getAvailableCaptureResultKeys();
             //CaptureResult.Key key = characteristicsKeys.get(0);
         }
+
+        /*
+        public static void setExposureProgress(int progress)
+        {
+            curExposureProgress = progress;
+        }
+
+        public static int getExposureProgress()
+        {
+            return curExposureProgress;
+        }
+
+         */
+
+
+
+        public static boolean isExposureCompensationSupportedCamera2()
+        {
+            Range<Integer> expRange = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+                return expRange.getLower() == expRange.getUpper() ? false : true;
+        }
+
+        private static int getMinExposureCompensation()
+        {
+            Range<Integer> range1 = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+            return range1.getLower();
+        }
+
+        private static int getMaxExposureCompensation()
+        {
+            Range<Integer> range1 = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+            return range1.getUpper();
+        }
+
+
+
     }
 
 

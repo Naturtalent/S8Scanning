@@ -28,6 +28,9 @@
     <string name="wifi_connection">Connect Wifi</string>
     <string name="alert_dialog_ok">OK</string>
     <string name="camera_zoom">Zoom</string>
+    <string name="focus">Focus</string>
+    <string name="exposure">Belichtung</string>
+    <string name="aspect_ratio">Aspect Ratio</string>
 
 
 </resources>

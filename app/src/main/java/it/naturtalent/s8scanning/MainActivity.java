@@ -4,71 +4,53 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Dialog;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.CaptureResult;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
-import android.net.Network;
 import android.net.NetworkInfo;
 import android.net.Uri;
-import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
-import android.net.wifi.WifiNetworkSuggestion;
 import android.os.Build;
 import android.os.Bundle;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
-import com.techyourchance.threadposter.UiThreadPoster;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-import androidx.annotation.UiThread;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
-import androidx.lifecycle.ViewModel;
-import androidx.lifecycle.ViewModelProvider;
 
 import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
-import android.view.SurfaceHolder;
 import android.view.View;
 
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.Window;
 import android.view.WindowManager;
-import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.util.ArrayList;
 import java.util.List;
 
-import javax.net.ssl.HttpsURLConnection;
-
+import Dialogs.ExposureDialog;
+import Dialogs.FocusDialog;
 import Dialogs.ZoomDialog;
 
 /**
@@ -107,6 +89,8 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
     private MediaPlayer _shootMP;
 
     private ZoomDialog zoomDialog;
+    private FocusDialog focusDialog;
+    private ExposureDialog exposureDialog;
 
 
 
@@ -149,6 +133,22 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
         setSupportActionBar(toolbar);
 
        // int deviceOrientation = getWindowManager().getDefaultDisplay().getRotation();
+
+        exposureDialog = new ExposureDialog(this);
+
+        // Fokusdialog
+        focusDialog = new FocusDialog(this);
+        focusDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        focusDialog.setContentView(R.layout.progressbar);
+        // ohne Dialoghintergrundrechteck
+        //focusDialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        // Dimming Dialoghintergrund
+        WindowManager.LayoutParams lp = focusDialog.getWindow().getAttributes();
+        lp.dimAmount = 0.0f; // Dim level. 0.0 - no dim, 1.0 - completely opaque
+        focusDialog.getWindow().setAttributes(lp);
+
+
+
 
         zoomDialog = new ZoomDialog(this, new ZoomDialog.ZoomDialogListener()
         {
@@ -263,11 +263,11 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
 
      */
 
-    private Dialog createZoomDialog()
+    private Dialog createAspectRatio()
     {
         Dialog dialog;
 
-        String[] types = {"By Zip", "By Category"};
+        String[] types = {"1:1", "4:3", "16:9"};
 
         dialog = new AlertDialog.Builder(this)
                 .setItems(types, new DialogInterface.OnClickListener()
@@ -279,16 +279,20 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
                         switch(which)
                         {
                             case 0:
-                                //onZipRequested();
-                                break;
                             case 1:
-                                //onCategoryRequested();
+                            case 2:
+                                String stgWidth = types[which].substring(0, types[which].indexOf(':'));
+                                int width = Integer.parseInt(stgWidth);
+                                String stgHeight = types[which].substring(types[which].indexOf(':')+1);
+                                int height = Integer.parseInt(stgHeight);
+                                Camera.Camera2Service.surfaceView.setAspectRatio(width,height);
+                                Log.e(TAG, "AR: "+types[which]);
                                 break;
                         }
                     }
                 })
                 .create();
-        dialog.setTitle("Zoom");
+        dialog.setTitle("Aspect Ratio");
         return dialog;
       };
 
@@ -405,10 +409,20 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
                 mDataText.setText("");
                 return true;
 
-            case R.id.camera_zoom:
+            case R.id.auto_focus:
+                focusDialog.show();
+                break;
 
+            case R.id.auto_exposure:
+                exposureDialog.show();
+                break;
+
+            case R.id.camera_zoom:
                 zoomDialog.show();
-                //createZoomDialog().show();
+                break;
+
+            case R.id.aspect_ratio:
+                createAspectRatio().show();
                 break;
 
             case R.id.start_accesspoint:
@@ -723,7 +737,8 @@ public class MainActivity extends AppCompatActivity  implements DownloadCallback
             //Rect cropRectangle = new Rect(500, 375, 1500, 1125);
             //builder.set(CaptureRequest.SCALER_CROP_REGION, cropRectangle);
 
-            Camera.Camera2Service.zoom.setZoom(builder,Camera.Camera2Service.zoomFaktor);
+
+            //Camera.Camera2Service.zoom.setZoom(builder,Camera.Camera2Service.zoomFaktor);
 
             return builder.build();
         } catch (CameraAccessException e)

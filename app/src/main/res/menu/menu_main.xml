@@ -43,8 +43,20 @@
         android:icon="@drawable/stop"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/auto_focus"
+        android:icon="@drawable/af"
+        android:title="@string/focus"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/auto_exposure"
+        android:icon="@drawable/ae"
+        android:title="@string/exposure"
+        app:showAsAction="always" />
+
     <item android:id="@+id/aspect_ratio"
-        android:title="@string/stop_scanning"
+        android:title="@string/aspect_ratio"
         android:icon="@drawable/aspect_ratio"
         app:showAsAction="always" />
 
